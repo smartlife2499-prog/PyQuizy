@@ -1,0 +1,2 @@
+flet>=0.25.0
+# sqlite3 is in the standard library – no extra package needed

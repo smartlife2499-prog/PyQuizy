@@ -1,0 +1,37 @@
+[project]
+name = "pyquizy"
+version = "1.0.0"
+description = "PyQuizy – Interactive Python quiz app with 500+ questions across 10 topics"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "PyQuizy", email = "pyquizy@example.com" }
+]
+dependencies = [
+    "flet>=0.25.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flet[all]>=0.25.0",
+]
+
+# Flet packaging / build settings
+# Docs: https://docs.flet.dev/publish
+[tool.flet]
+org = "com.pyquizy"
+product = "PyQuizy"
+company = "PyQuizy"
+copyright = "Copyright (c) 2025 PyQuizy"
+bundle_id = "com.pyquizy.app"
+
+[tool.flet.app]
+# Path to the folder that contains main.py
+path = "."
+
+[tool.flet.android]
+# Adaptive icon background (Python yellow)
+adaptive_icon_background = "#FFD43B"
+
+[tool.flet.ios]
+# Optional iOS-specific settings can go here
