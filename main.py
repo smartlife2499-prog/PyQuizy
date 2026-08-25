@@ -771,6 +771,43 @@ def _parse_code_question(question: str):
     return code.strip("\n"), lang, rest.strip()
 
 
+# --- "Show Answer" explanations: concise, code-focused -------------
+def _split_answer(answer: str):
+    """Split a stored answer into (result, reasoning).
+
+    Most answers in this dataset are written as either "result — reasoning"
+    or a plain standalone fact with no separate reasoning clause. This never
+    invents new content — it only splits what's already there.
+    """
+    for sep in (" — ", ", since ", ", because "):
+        if sep in answer:
+            head, tail = answer.split(sep, 1)
+            return head.strip(), tail.strip()
+    return answer.strip(), None
+
+
+def build_explanation_controls(topic: str, question: str, answer: str, code, lang):
+    """Return a short, code-focused explanation: the reasoning (only if
+    there is one) followed by a clearly marked final answer. No filler.
+    """
+    result, reasoning = _split_answer(answer)
+    controls = []
+
+    if reasoning:
+        controls.append(ft.Text(reasoning, size=14, selectable=True))
+
+    controls.append(
+        ft.Container(
+            content=ft.Text(f"\u2705 Answer: {result}", weight=ft.FontWeight.BOLD, size=15),
+            bgcolor="#e8f5e9",
+            border_radius=6,
+            padding=10,
+        )
+    )
+
+    return controls
+
+
 def main(page: ft.Page):
     # App-wide window configuration
     page.title = "PyQuizy"
@@ -797,14 +834,48 @@ def main(page: ft.Page):
     # which is what was causing the slow, stuck-session relaunch.
 
     def build_home_view() -> ft.View:
-        menu_buttons = [
-            ft.ElevatedButton(
-                topic,
-                height=56,
-                on_click=lambda e, t=topic: show_quiz(t),
+        menu_buttons = []
+        for topic, questions in QUIZ_DATA.items():
+            total = len(questions)
+            done = len(load_progress(topic))
+            ratio = (done / total) if total else 0
+
+            menu_buttons.append(
+                ft.ElevatedButton(
+                    content=ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    topic,
+                                    size=15,
+                                    weight=ft.FontWeight.BOLD,
+                                    text_align=ft.TextAlign.CENTER,
+                                ),
+                                ft.ProgressBar(
+                                    value=ratio,
+                                    height=6,
+                                    border_radius=3,
+                                    color=(
+                                        ft.Colors.GREEN
+                                        if done == total
+                                        else ft.Colors.BLUE
+                                    ),
+                                ),
+                                ft.Text(
+                                    f"{done}/{total} done",
+                                    size=12,
+                                    color=ft.Colors.GREY_700,
+                                ),
+                            ],
+                            spacing=4,
+                            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                        ),
+                        padding=ft.Padding(left=4, right=4, top=6, bottom=6),
+                    ),
+                    height=72,
+                    on_click=lambda e, t=topic: show_quiz(t),
+                )
             )
-            for topic in QUIZ_DATA.keys()
-        ]
 
         return ft.View(
             route="/",
@@ -836,6 +907,9 @@ def main(page: ft.Page):
     def show_home(e=None):
         # Reset the view stack back down to just the home screen. Used both
         # for the initial launch and for the AppBar/back-button navigation.
+        # Always rebuilding (rather than reusing a cached view) means the
+        # per-topic progress bars reflect the latest checkbox state every
+        # time the user returns here from a quiz.
         page.views.clear()
         page.views.append(build_home_view())
         page.update()
@@ -846,10 +920,12 @@ def main(page: ft.Page):
         answer: str,
         done: bool,
         on_toggle,
+        topic: str,
     ):
         """Build a single question block: a done-tracking checkbox, a
         numbered question (with a syntax-highlighted code block if
-        present), a copy button, and an expandable 'Show Answer' tile.
+        present), a copy button, and an expandable 'Show Answer' tile
+        with a step-by-step explanation.
 
         `done` is the question's initial checked state (restored from the
         local SQLite database), and `on_toggle` saves the new state to
@@ -983,7 +1059,12 @@ def main(page: ft.Page):
                     collapsed_icon_color=ft.Colors.BLUE,
                     controls=[
                         ft.Container(
-                            content=ft.Text(answer, selectable=True),
+                            content=ft.Column(
+                                build_explanation_controls(
+                                    topic, question, answer, code, lang
+                                ),
+                                spacing=4,
+                            ),
                             padding=10,
                         )
                     ],
@@ -1047,6 +1128,7 @@ def main(page: ft.Page):
                         answer,
                         i in progress,
                         make_toggle_handler(i),
+                        topic,
                     )
                 )
             state["loaded"] = end
@@ -1065,8 +1147,9 @@ def main(page: ft.Page):
 
         def go_back(e=None):
             if len(page.views) > 1:
-                page.views.pop()
-                page.update()
+                # Rebuild (not just pop) so the home screen's per-topic
+                # progress bars reflect any checkboxes toggled in this quiz.
+                show_home()
 
         quiz_view = ft.View(
             route=f"/quiz/{topic}",
@@ -1085,15 +1168,15 @@ def main(page: ft.Page):
         load_more()
 
     def handle_view_pop(e: ft.ViewPopEvent):
-        # Fires for the AppBar back arrow and for the Android
-        # hardware/gesture back button, since Flet routes both through the
-        # views stack. Popping here keeps both paths in sync. When only the
-        # home view is left, there's nothing to pop, so Flet/Android falls
-        # through to their normal "exit app" behavior — which is now a
-        # clean shutdown instead of the previous undefined state.
+        # Fires for the Android hardware/gesture back button (the AppBar
+        # arrow uses go_back() directly). When only the home view is left,
+        # there's nothing to pop, so Flet/Android falls through to their
+        # normal "exit app" behavior — which is now a clean shutdown
+        # instead of the previous undefined state.
         if len(page.views) > 1:
-            page.views.pop()
-            page.update()
+            # Rebuild the home view rather than just popping, so its
+            # per-topic progress bars pick up any changes made in the quiz.
+            show_home()
 
     page.on_view_pop = handle_view_pop
 
