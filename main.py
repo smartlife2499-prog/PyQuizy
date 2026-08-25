@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sqlite3
 from pathlib import Path
 
@@ -6,9 +7,20 @@ import flet as ft
 
 # --- Progress persistence (SQLite) -----------------------------------
 # A small local database that survives closing and reopening the app.
-# Stored next to this script so it works the same in a dev checkout or
-# a packaged build, without depending on any browser/client storage API.
-DB_PATH = Path(__file__).resolve().parent / "pyquizy_progress.db"
+#
+# On desktop (running the raw .py) this sits next to the script, which is
+# writable. On a *packaged* build (Android, iOS, and packaged desktop
+# apps), the app's own install/bundle directory is READ-ONLY — writing
+# there raises sqlite3.OperationalError and crashes the app the first
+# time a question gets checked off. Flet exposes FLET_APP_STORAGE_DATA
+# specifically for this: a writable, app-private directory that's durable
+# across app updates. We use it when present, and fall back to the
+# script's own folder for a plain `python main.py` dev run.
+DB_PATH = (
+    Path(os.environ["FLET_APP_STORAGE_DATA"])
+    if "FLET_APP_STORAGE_DATA" in os.environ
+    else Path(__file__).resolve().parent
+) / "pyquizy_progress.db"
 
 
 def _db_connect() -> sqlite3.Connection:
