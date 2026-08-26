@@ -35,6 +35,14 @@ def _db_connect() -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
     return conn
 
 
@@ -71,6 +79,33 @@ def save_progress(topic: str, index: int, done: bool) -> None:
             conn.commit()
     except Exception as ex:
         print(f"[PyQuizy] save_progress({topic!r}, {index}) failed: {ex}")
+
+
+def get_setting(key: str):
+    """Return a stored string setting, or None if it was never set."""
+    try:
+        with _db_connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?", (key,)
+            ).fetchone()
+        return row[0] if row else None
+    except Exception as ex:
+        print(f"[PyQuizy] get_setting({key!r}) failed: {ex}")
+        return None
+
+
+def set_setting(key: str, value: str) -> None:
+    """Persist a single string setting immediately."""
+    try:
+        with _db_connect() as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+            conn.commit()
+    except Exception as ex:
+        print(f"[PyQuizy] set_setting({key!r}, {value!r}) failed: {ex}")
 
 # --- Quiz Content (data-driven: edit this dict to add/change questions) ---
 # Each topic has 50 questions. The majority are "real code" questions
@@ -596,7 +631,6 @@ QUIZ_DATA = {
         ("Code:\nclass Repeater:\n    def __init__(self, value, times):\n        self.value = value\n        self.times = times\n    def __iter__(self):\n        for _ in range(self.times):\n            yield self.value\nfor v in Repeater('x', 3):\n    print(v)\n\nWhat is the output and what does using a generator inside __iter__ achieve?", "x\nx\nx — defining __iter__ as a generator function is a concise way to make a custom class iterable, without writing a separate __next__ method."),
         ("Code:\ndef safe_divide_gen(pairs):\n    for a, b in pairs:\n        try:\n            yield a / b\n        except ZeroDivisionError:\n            yield None\nprint(list(safe_divide_gen([(10, 2), (5, 0), (9, 3)])))\n\nWhat is the output?", "[5.0, None, 3.0] — the generator handles the error per-item and keeps yielding instead of stopping the whole iteration."),
         ("Code:\nimport functools\ndef add_logging(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        print(f'args={args}, kwargs={kwargs}')\n        return func(*args, **kwargs)\n    return wrapper\n\n@add_logging\ndef greet(name, greeting='Hi'):\n    return f'{greeting}, {name}'\n\nprint(greet('Sam', greeting='Hello'))\n\nWhat is the output?", "args=('Sam',), kwargs={'greeting': 'Hello'}\nHello, Sam"),
-        ("Code:\ndef gen():\n    print('A')\n    yield\n    print('B')\n    yield\n    print('C')\ng = gen()\nfor _ in g:\n    pass\n\nWhat is the output?", "A\nB\nC — a for loop repeatedly calls next() until StopIteration, driving the generator through all its yields."),
     ],
     "Regular Expressions and String Processing": [
         ("What is a regular expression?", "A pattern-matching language used to search, validate, and manipulate text based on defined rules."),
@@ -820,6 +854,97 @@ def build_explanation_controls(topic: str, question: str, answer: str, code, lan
     return controls
 
 
+# --- First-launch onboarding: 3 fun landing pages ----------------------
+# Shown once, right after the very first install (tracked via the
+# "onboarding_seen" row in the settings table above), then never again.
+# Each page pairs a big, friendly "person with a phone" illustration
+# (built from plain shapes + emoji, so no external image files are
+# needed) with a short, upbeat pitch for what PyQuizy actually does.
+ONBOARDING_PAGES = [
+    {
+        "face": "\U0001F642",  # 🙂
+        "bg": "#E3F2FD",
+        "accent": ft.Colors.BLUE,
+        "title": "Meet PyQuizy \U0001F40D",
+        "body": (
+            "Your pocket-sized Python coach! Quick quiz questions, real "
+            "code snippets, zero boring lectures."
+        ),
+    },
+    {
+        "face": "\U0001F604",  # 😄
+        "bg": "#E8F5E9",
+        "accent": ft.Colors.GREEN,
+        "title": "Learn Anywhere, Anytime",
+        "body": (
+            "Waiting for the bus? Bored in line? Pull out your phone and "
+            "squeeze in a question or two \u2014 it only takes a minute."
+        ),
+    },
+    {
+        "face": "\U0001F929",  # 🤩
+        "bg": "#FFF3E0",
+        "accent": ft.Colors.ORANGE,
+        "title": "Watch Your Progress Grow",
+        "body": (
+            "Every topic keeps score. Tick off questions, fill up the bar, "
+            "and flex your streak as it climbs to 100%."
+        ),
+    },
+]
+
+
+def build_onboarding_illustration(data: dict) -> ft.Container:
+    """A cheerful little scene: a big smiling face in a soft-colored
+    circle, with a smaller circle 'holding up' a phone icon at its side
+    — a playful stand-in for a photo of someone grinning at their phone,
+    built entirely from Flet shapes/emoji so it never needs a bundled
+    image file and always matches the page's accent color.
+    """
+    return ft.Container(
+        content=ft.Stack(
+            [
+                ft.Container(
+                    width=190,
+                    height=190,
+                    border_radius=95,
+                    bgcolor=data["bg"],
+                    left=0,
+                    top=0,
+                ),
+                ft.Container(
+                    content=ft.Text(data["face"], size=88),
+                    width=190,
+                    height=190,
+                    alignment=ft.Alignment.CENTER,
+                    left=0,
+                    top=0,
+                ),
+                ft.Container(
+                    content=ft.Icon(
+                        ft.Icons.SMARTPHONE_ROUNDED, size=30, color=ft.Colors.WHITE
+                    ),
+                    width=52,
+                    height=52,
+                    border_radius=26,
+                    bgcolor=data["accent"],
+                    alignment=ft.Alignment.CENTER,
+                    right=-6,
+                    bottom=2,
+                    shadow=ft.BoxShadow(
+                        blur_radius=8,
+                        color=ft.Colors.with_opacity(0.35, ft.Colors.BLACK),
+                    ),
+                ),
+            ],
+            width=190,
+            height=190,
+        ),
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding(top=4, bottom=4, left=0, right=0),
+    )
+
+
 def main(page: ft.Page):
     # App-wide window configuration
     page.title = "PyQuizy"
@@ -924,6 +1049,105 @@ def main(page: ft.Page):
         # time the user returns here from a quiz.
         page.views.clear()
         page.views.append(build_home_view())
+        page.update()
+
+    def finish_onboarding(e=None):
+        # Flip the persisted flag so this never shows again, then land on
+        # the real home screen.
+        set_setting("onboarding_seen", "1")
+        show_home()
+
+    def build_onboarding_view(index: int) -> ft.View:
+        """One of the 3 first-launch landing pages. Built to fit a single
+        phone screen with no scrolling: a compact top row (Skip), a
+        flexible illustration in the middle, short punchy copy, page
+        dots, and a full-width action button pinned at the bottom.
+        """
+        data = ONBOARDING_PAGES[index]
+        total_pages = len(ONBOARDING_PAGES)
+        is_last = index == total_pages - 1
+
+        def go_next(e=None):
+            if is_last:
+                finish_onboarding()
+            else:
+                page.views[:] = [build_onboarding_view(index + 1)]
+                page.update()
+
+        def skip(e=None):
+            finish_onboarding()
+
+        dots = ft.Row(
+            [
+                ft.Container(
+                    width=8,
+                    height=8,
+                    border_radius=4,
+                    bgcolor=data["accent"] if i == index else ft.Colors.GREY_300,
+                )
+                for i in range(total_pages)
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=6,
+        )
+
+        top_row = ft.Row(
+            [
+                ft.TextButton(
+                    "Skip",
+                    on_click=skip,
+                    style=ft.ButtonStyle(color=ft.Colors.GREY_600),
+                )
+                if not is_last
+                else ft.Container(height=36)
+            ],
+            alignment=ft.MainAxisAlignment.END,
+        )
+
+        return ft.View(
+            route=f"/onboarding/{index}",
+            bgcolor=data["bg"],
+            padding=ft.Padding(left=24, right=24, top=8, bottom=20),
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            controls=[
+                ft.Column(
+                    [
+                        top_row,
+                        ft.Container(expand=3, content=build_onboarding_illustration(data)),
+                        ft.Text(
+                            data["title"],
+                            size=22,
+                            weight=ft.FontWeight.BOLD,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.Container(height=8),
+                        ft.Text(
+                            data["body"],
+                            size=14,
+                            text_align=ft.TextAlign.CENTER,
+                            color=ft.Colors.GREY_800,
+                        ),
+                        ft.Container(expand=2),
+                        dots,
+                        ft.Container(height=14),
+                        ft.ElevatedButton(
+                            "Get Started \U0001F680" if is_last else "Next",
+                            on_click=go_next,
+                            bgcolor=data["accent"],
+                            color=ft.Colors.WHITE,
+                            height=48,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    alignment=ft.MainAxisAlignment.START,
+                    expand=True,
+                )
+            ],
+        )
+
+    def show_onboarding(index: int = 0):
+        page.views.clear()
+        page.views.append(build_onboarding_view(index))
         page.update()
 
     def build_question_control(
@@ -1192,8 +1416,13 @@ def main(page: ft.Page):
 
     page.on_view_pop = handle_view_pop
 
-    # Start the app on the home menu screen
-    show_home()
+    # First-ever launch shows the 3 onboarding landing pages; every launch
+    # after that (flag persisted in SQLite, so it survives app restarts)
+    # goes straight to the home menu screen.
+    if get_setting("onboarding_seen") == "1":
+        show_home()
+    else:
+        show_onboarding(0)
 
 
 ft.app(target=main, assets_dir="assets")
