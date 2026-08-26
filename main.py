@@ -107,6 +107,7 @@ def set_setting(key: str, value: str) -> None:
     except Exception as ex:
         print(f"[PyQuizy] set_setting({key!r}, {value!r}) failed: {ex}")
 
+
 # --- Quiz Content (data-driven: edit this dict to add/change questions) ---
 # Each topic has 50 questions. The majority are "real code" questions
 # (predict the output / find the bug / what does this do), with a smaller
@@ -832,7 +833,7 @@ def _split_answer(answer: str):
     return answer.strip(), None
 
 
-def build_explanation_controls(topic: str, question: str, answer: str, code, lang):
+def build_explanation_controls(answer: str):
     """Return a short, code-focused explanation: the reasoning (only if
     there is one) followed by a clearly marked final answer. No filler.
     """
@@ -987,6 +988,17 @@ def main(page: ft.Page):
                                     size=15,
                                     weight=ft.FontWeight.BOLD,
                                     text_align=ft.TextAlign.CENTER,
+                                    # Longer topic names (the last few in
+                                    # QUIZ_DATA, e.g. "Working with External
+                                    # Libraries and APIs") wrap onto a second
+                                    # line. Capping at 2 lines with an
+                                    # ellipsis keeps every card the same
+                                    # height instead of letting long titles
+                                    # push the "X/50 done" text out of the
+                                    # fixed-height button, which is what was
+                                    # clipping it before.
+                                    max_lines=2,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
                                 ft.ProgressBar(
                                     value=ratio,
@@ -1009,7 +1021,10 @@ def main(page: ft.Page):
                         ),
                         padding=ft.Padding(left=4, right=4, top=6, bottom=6),
                     ),
-                    height=72,
+                    # Tall enough for a 2-line title + progress bar + the
+                    # "done" text without clipping (72 was too tight once a
+                    # title wrapped to 2 lines).
+                    height=92,
                     on_click=lambda e, t=topic: show_quiz(t),
                 )
             )
@@ -1156,7 +1171,6 @@ def main(page: ft.Page):
         answer: str,
         done: bool,
         on_toggle,
-        topic: str,
     ):
         """Build a single question block: a done-tracking checkbox, a
         numbered question (with a syntax-highlighted code block if
@@ -1296,9 +1310,7 @@ def main(page: ft.Page):
                     controls=[
                         ft.Container(
                             content=ft.Column(
-                                build_explanation_controls(
-                                    topic, question, answer, code, lang
-                                ),
+                                build_explanation_controls(answer),
                                 spacing=4,
                             ),
                             padding=10,
@@ -1364,7 +1376,6 @@ def main(page: ft.Page):
                         answer,
                         i in progress,
                         make_toggle_handler(i),
-                        topic,
                     )
                 )
             state["loaded"] = end
