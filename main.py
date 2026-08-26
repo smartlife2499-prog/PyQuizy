@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 import flet as ft
@@ -23,27 +24,45 @@ DB_PATH = (
 ) / "pyquizy_progress.db"
 
 
-def _db_connect() -> sqlite3.Connection:
+@contextmanager
+def _db_connect():
+    """Open a connection, ensure both tables exist, and *always* close the
+    connection again once the caller's `with` block ends.
+
+    sqlite3.Connection is itself usable as `with conn:`, but that only
+    commits or rolls back the transaction — it does NOT close the
+    connection. Every load_progress/save_progress/get_setting/set_setting
+    call used to open a fresh connection that way and never close it,
+    leaking a file handle each time. With enough taps (checking off
+    questions, opening quizzes, flipping the onboarding flag) that can
+    exhaust the process's file descriptors and crash the app. Wrapping
+    the raw connection in this generator-based context manager guarantees
+    conn.close() runs in a `finally`, no matter how the block exits.
+    """
     conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS progress (
-            topic TEXT NOT NULL,
-            question_index INTEGER NOT NULL,
-            done INTEGER NOT NULL DEFAULT 1,
-            PRIMARY KEY (topic, question_index)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS progress (
+                topic TEXT NOT NULL,
+                question_index INTEGER NOT NULL,
+                done INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (topic, question_index)
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
         )
-        """
-    )
-    return conn
+        yield conn
+    finally:
+        conn.close()
+
 
 
 def load_progress(topic: str) -> dict:
@@ -962,6 +981,16 @@ def main(page: ft.Page):
     # in-app logo image on the home screen has been removed, not this.)
     page.window.icon = "logo.png"
 
+    # A single Clipboard service instance attached to the page via
+    # page.overlay. This control needs to be part of the page's control
+    # tree before any of its methods can be invoked — a bare ft.Clipboard()
+    # created fresh inside an event handler has no page attached, so
+    # .set() would always raise internally and the "Copy" button would
+    # silently fail every time. Creating it once here, up front, and
+    # reusing it from every question's copy button avoids that.
+    clipboard_service = ft.Clipboard()
+    page.overlay.append(clipboard_service)
+
     # --- Navigation -----------------------------------------------------
     # Everything below drives page.views instead of clearing/re-adding
     # page.controls directly. This matters for mobile: Flet only wires the
@@ -984,7 +1013,7 @@ def main(page: ft.Page):
                             [
                                 ft.Text(
                                     topic,
-                                    size=15,
+                                    size=14,
                                     weight=ft.FontWeight.BOLD,
                                     text_align=ft.TextAlign.CENTER,
                                 ),
@@ -1006,10 +1035,10 @@ def main(page: ft.Page):
                             ],
                             spacing=4,
                             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                            tight=True,
                         ),
-                        padding=ft.Padding(left=4, right=4, top=6, bottom=6),
+                        padding=ft.Padding(left=6, right=6, top=10, bottom=10),
                     ),
-                    height=72,
                     on_click=lambda e, t=topic: show_quiz(t),
                 )
             )
@@ -1071,8 +1100,7 @@ def main(page: ft.Page):
             if is_last:
                 finish_onboarding()
             else:
-                page.views[:] = [build_onboarding_view(index + 1)]
-                page.update()
+                show_onboarding(index + 1)
 
         def skip(e=None):
             finish_onboarding()
@@ -1200,7 +1228,7 @@ def main(page: ft.Page):
                     copied = False
             if not copied:
                 try:
-                    await asyncio.wait_for(ft.Clipboard().set(question), timeout=3)
+                    await asyncio.wait_for(clipboard_service.set(question), timeout=3)
                     copied = True
                 except Exception:
                     copied = False
