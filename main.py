@@ -22,6 +22,12 @@ DB_PATH = (
     else Path(__file__).resolve().parent
 ) / "pyquizy_progress.db"
 
+# Public URL of the hosted privacy policy page (see privacy-policy.html).
+# Play Console needs this exact URL pasted into your app's "App content" ->
+# "Privacy policy" section, and it's also opened in-app from the link below
+# once you've hosted the page and swapped this placeholder for the real URL.
+PRIVACY_POLICY_URL = "https://example.com/pyquizy-privacy-policy"
+
 
 def _db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -979,7 +985,7 @@ def main(page: ft.Page):
             ratio = (done / total) if total else 0
 
             menu_buttons.append(
-                ft.ElevatedButton(
+                ft.Button(
                     content=ft.Container(
                         content=ft.Column(
                             [
@@ -1052,6 +1058,15 @@ def main(page: ft.Page):
                     menu_buttons,
                     spacing=10,
                     horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                ),
+                ft.Container(
+                    content=ft.TextButton(
+                        "Privacy Policy",
+                        url=PRIVACY_POLICY_URL,
+                        style=ft.ButtonStyle(color=ft.Colors.GREY_600),
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=ft.Padding(top=8, bottom=0, left=0, right=0),
                 ),
             ],
         )
@@ -1145,7 +1160,7 @@ def main(page: ft.Page):
                         ft.Container(expand=2),
                         dots,
                         ft.Container(height=14),
-                        ft.ElevatedButton(
+                        ft.Button(
                             "Get Started \U0001F680" if is_last else "Next",
                             on_click=go_next,
                             bgcolor=data["accent"],
@@ -1194,10 +1209,9 @@ def main(page: ft.Page):
         )
 
         async def copy_question(e):
-            # Flet's clipboard API differs across versions: older Flet uses
-            # the synchronous page.set_clipboard(), newer Flet (1.0+) uses
-            # an async ft.Clipboard() service instead. Try both so this
-            # works regardless of which Flet version is installed.
+            # Copy to clipboard via Flet's Clipboard service (current
+            # Flet's supported API for this — page.set_clipboard() was
+            # from an older Flet release and no longer exists on Page).
             #
             # The asyncio.wait_for timeout below is a deliberate safety
             # net: if the app loses focus mid-await (e.g. the user hits
@@ -1205,30 +1219,24 @@ def main(page: ft.Page):
             # leave the session's event loop stuck waiting forever, which
             # is exactly the kind of stuck state that made relaunching the
             # app slow. Timing out guarantees this can never hang.
-            copied = False
-            if hasattr(page, "set_clipboard"):
-                try:
-                    page.set_clipboard(question)
-                    copied = True
-                except Exception:
-                    copied = False
-            if not copied:
-                try:
-                    await asyncio.wait_for(ft.Clipboard().set(question), timeout=3)
-                    copied = True
-                except Exception:
-                    copied = False
+            try:
+                await asyncio.wait_for(ft.Clipboard().set(question), timeout=3)
+                copied = True
+            except Exception:
+                copied = False
 
             message = "Question copied!" if copied else "Couldn't copy question"
             snackbar = ft.SnackBar(ft.Text(message), duration=1200)
-            if hasattr(page, "open"):
-                page.open(snackbar)
-            elif hasattr(page, "show_dialog"):
+            # SnackBar is a DialogControl, shown via Page.show_dialog() in
+            # current Flet (page.open()/page.snack_bar are from an older
+            # Flet API and no longer exist on Page). Guarded because a
+            # crash here (e.g. the view was popped mid-tap) would otherwise
+            # propagate out of an event handler — on Android that can hang
+            # the session instead of just silently skipping the toast.
+            try:
                 page.show_dialog(snackbar)
-            else:
-                page.snack_bar = snackbar
-                page.snack_bar.open = True
-                page.update()
+            except Exception as ex:
+                print(f"[PyQuizy] show_dialog failed: {ex}")
 
         copy_button = ft.IconButton(
             icon=ft.Icons.COPY,
@@ -1383,7 +1391,7 @@ def main(page: ft.Page):
             load_more_row.controls.clear()
             if state["loaded"] < total:
                 load_more_row.controls.append(
-                    ft.ElevatedButton(
+                    ft.Button(
                         f"Load More ({state['loaded']}/{total})",
                         on_click=load_more,
                     )
