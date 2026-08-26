@@ -1,6 +1,6 @@
+import asyncio
 import os
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 
 import flet as ft
@@ -23,45 +23,27 @@ DB_PATH = (
 ) / "pyquizy_progress.db"
 
 
-@contextmanager
-def _db_connect():
-    """Open a connection, ensure both tables exist, and *always* close the
-    connection again once the caller's `with` block ends.
-
-    sqlite3.Connection is itself usable as `with conn:`, but that only
-    commits or rolls back the transaction — it does NOT close the
-    connection. Every load_progress/save_progress/get_setting/set_setting
-    call used to open a fresh connection that way and never close it,
-    leaking a file handle each time. With enough taps (checking off
-    questions, opening quizzes, flipping the onboarding flag) that can
-    exhaust the process's file descriptors and crash the app. Wrapping
-    the raw connection in this generator-based context manager guarantees
-    conn.close() runs in a `finally`, no matter how the block exits.
-    """
+def _db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
-    try:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS progress (
-                topic TEXT NOT NULL,
-                question_index INTEGER NOT NULL,
-                done INTEGER NOT NULL DEFAULT 1,
-                PRIMARY KEY (topic, question_index)
-            )
-            """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS progress (
+            topic TEXT NOT NULL,
+            question_index INTEGER NOT NULL,
+            done INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (topic, question_index)
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            )
-            """
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
         )
-        yield conn
-    finally:
-        conn.close()
-
+        """
+    )
+    return conn
 
 
 def load_progress(topic: str) -> dict:
@@ -850,9 +832,7 @@ def _split_answer(answer: str):
     return answer.strip(), None
 
 
-def build_explanation_controls(
-    _topic: str, _question: str, answer: str, _code: str | None, _lang: str | None
-):
+def build_explanation_controls(topic: str, question: str, answer: str, code, lang):
     """Return a short, code-focused explanation: the reasoning (only if
     there is one) followed by a clearly marked final answer. No filler.
     """
@@ -982,13 +962,6 @@ def main(page: ft.Page):
     # in-app logo image on the home screen has been removed, not this.)
     page.window.icon = "logo.png"
 
-    # Clipboard: do NOT use ft.Clipboard() + page.overlay. On Android (and
-    # some packaged desktop builds) the Flutter client does not register
-    # that control type, which surfaces as a red "Unknown control:
-    # Clipboard" error the moment the page loads. Use page.set_clipboard()
-    # instead — it is available on older and current Flet, works on
-    # mobile, and does not inject any control into the tree.
-
     # --- Navigation -----------------------------------------------------
     # Everything below drives page.views instead of clearing/re-adding
     # page.controls directly. This matters for mobile: Flet only wires the
@@ -1011,7 +984,7 @@ def main(page: ft.Page):
                             [
                                 ft.Text(
                                     topic,
-                                    size=14,
+                                    size=15,
                                     weight=ft.FontWeight.BOLD,
                                     text_align=ft.TextAlign.CENTER,
                                 ),
@@ -1033,11 +1006,11 @@ def main(page: ft.Page):
                             ],
                             spacing=4,
                             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-                            tight=True,
                         ),
-                        padding=ft.Padding(left=6, right=6, top=10, bottom=10),
+                        padding=ft.Padding(left=4, right=4, top=6, bottom=6),
                     ),
-                    on_click=lambda _e, t=topic: show_quiz(t),
+                    height=72,
+                    on_click=lambda e, t=topic: show_quiz(t),
                 )
             )
 
@@ -1068,7 +1041,7 @@ def main(page: ft.Page):
             ],
         )
 
-    def show_home(_e=None):
+    def show_home(e=None):
         # Reset the view stack back down to just the home screen. Used both
         # for the initial launch and for the AppBar/back-button navigation.
         # Always rebuilding (rather than reusing a cached view) means the
@@ -1078,7 +1051,7 @@ def main(page: ft.Page):
         page.views.append(build_home_view())
         page.update()
 
-    def finish_onboarding(_e=None):
+    def finish_onboarding(e=None):
         # Flip the persisted flag so this never shows again, then land on
         # the real home screen.
         set_setting("onboarding_seen", "1")
@@ -1094,13 +1067,14 @@ def main(page: ft.Page):
         total_pages = len(ONBOARDING_PAGES)
         is_last = index == total_pages - 1
 
-        def go_next(_e=None):
+        def go_next(e=None):
             if is_last:
                 finish_onboarding()
             else:
-                show_onboarding(index + 1)
+                page.views[:] = [build_onboarding_view(index + 1)]
+                page.update()
 
-        def skip(_e=None):
+        def skip(e=None):
             finish_onboarding()
 
         dots = ft.Row(
@@ -1205,22 +1179,31 @@ def main(page: ft.Page):
             on_change=on_toggle,
         )
 
-        def copy_question(_e):
-            # Prefer page.set_clipboard — works on desktop, web, and mobile
-            # without registering a Clipboard control (which triggers
-            # "Unknown control: Clipboard" on Android packaged builds).
-            # Fall back to page.clipboard.set on newer Flet if present.
+        async def copy_question(e):
+            # Flet's clipboard API differs across versions: older Flet uses
+            # the synchronous page.set_clipboard(), newer Flet (1.0+) uses
+            # an async ft.Clipboard() service instead. Try both so this
+            # works regardless of which Flet version is installed.
+            #
+            # The asyncio.wait_for timeout below is a deliberate safety
+            # net: if the app loses focus mid-await (e.g. the user hits
+            # back right as they tap copy), an unresolved await here can
+            # leave the session's event loop stuck waiting forever, which
+            # is exactly the kind of stuck state that made relaunching the
+            # app slow. Timing out guarantees this can never hang.
             copied = False
-            try:
-                if hasattr(page, "set_clipboard"):
+            if hasattr(page, "set_clipboard"):
+                try:
                     page.set_clipboard(question)
                     copied = True
-                elif getattr(page, "clipboard", None) is not None:
-                    page.clipboard.set(question)
+                except Exception:
+                    copied = False
+            if not copied:
+                try:
+                    await asyncio.wait_for(ft.Clipboard().set(question), timeout=3)
                     copied = True
-            except Exception as ex:
-                print(f"[PyQuizy] copy_question failed: {ex}")
-                copied = False
+                except Exception:
+                    copied = False
 
             message = "Question copied!" if copied else "Couldn't copy question"
             snackbar = ft.SnackBar(ft.Text(message), duration=1200)
@@ -1369,7 +1352,7 @@ def main(page: ft.Page):
         question_list = ft.Column(spacing=8)
         load_more_row = ft.Row(alignment=ft.MainAxisAlignment.CENTER)
 
-        def load_more(_e=None):
+        def load_more(e=None):
             start = state["loaded"]
             end = min(start + batch_size, total)
             for i in range(start, end):
@@ -1398,7 +1381,7 @@ def main(page: ft.Page):
                 load_more_row.controls.append(ft.Container(height=12))
             page.update()
 
-        def go_back(_e=None):
+        def go_back(e=None):
             if len(page.views) > 1:
                 # Rebuild (not just pop) so the home screen's per-topic
                 # progress bars reflect any checkboxes toggled in this quiz.
@@ -1420,7 +1403,7 @@ def main(page: ft.Page):
         page.update()
         load_more()
 
-    def handle_view_pop(_e: ft.ViewPopEvent):
+    def handle_view_pop(e: ft.ViewPopEvent):
         # Fires for the Android hardware/gesture back button (the AppBar
         # arrow uses go_back() directly). When only the home view is left,
         # there's nothing to pop, so Flet/Android falls through to their
