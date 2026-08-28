@@ -22,12 +22,6 @@ DB_PATH = (
     else Path(__file__).resolve().parent
 ) / "pyquizy_progress.db"
 
-# Public URL of the hosted privacy policy page (see privacy-policy.html).
-# Play Console needs this exact URL pasted into your app's "App content" ->
-# "Privacy policy" section, and it's also opened in-app from the link below
-# once you've hosted the page and swapped this placeholder for the real URL.
-PRIVACY_POLICY_URL = "https://example.com/pyquizy-privacy-policy"
-
 
 def _db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -62,7 +56,7 @@ def load_progress(topic: str) -> dict:
             ).fetchall()
         return {row[0]: True for row in rows}
     except Exception as ex:
-        print(f"[PyQuizy] load_progress({topic!r}) failed: {ex}")
+        print(f"[Python Quizy] load_progress({topic!r}) failed: {ex}")
         return {}
 
 
@@ -84,7 +78,7 @@ def save_progress(topic: str, index: int, done: bool) -> None:
                 )
             conn.commit()
     except Exception as ex:
-        print(f"[PyQuizy] save_progress({topic!r}, {index}) failed: {ex}")
+        print(f"[Python Quizy] save_progress({topic!r}, {index}) failed: {ex}")
 
 
 def get_setting(key: str):
@@ -96,7 +90,7 @@ def get_setting(key: str):
             ).fetchone()
         return row[0] if row else None
     except Exception as ex:
-        print(f"[PyQuizy] get_setting({key!r}) failed: {ex}")
+        print(f"[Python Quizy] get_setting({key!r}) failed: {ex}")
         return None
 
 
@@ -111,7 +105,7 @@ def set_setting(key: str, value: str) -> None:
             )
             conn.commit()
     except Exception as ex:
-        print(f"[PyQuizy] set_setting({key!r}, {value!r}) failed: {ex}")
+        print(f"[Python Quizy] set_setting({key!r}, {value!r}) failed: {ex}")
 
 
 # --- Quiz Content (data-driven: edit this dict to add/change questions) ---
@@ -866,13 +860,13 @@ def build_explanation_controls(answer: str):
 # "onboarding_seen" row in the settings table above), then never again.
 # Each page pairs a big, friendly "person with a phone" illustration
 # (built from plain shapes + emoji, so no external image files are
-# needed) with a short, upbeat pitch for what PyQuizy actually does.
+# needed) with a short, upbeat pitch for what Python Quizy actually does.
 ONBOARDING_PAGES = [
     {
         "face": "\U0001F642",  # 🙂
         "bg": "#E3F2FD",
         "accent": ft.Colors.BLUE,
-        "title": "Meet PyQuizy \U0001F40D",
+        "title": "Meet Python Quizy \U0001F40D",
         "body": (
             "Your pocket-sized Python coach! Quick quiz questions, real "
             "code snippets, zero boring lectures."
@@ -954,7 +948,7 @@ def build_onboarding_illustration(data: dict) -> ft.Container:
 
 def main(page: ft.Page):
     # App-wide window configuration
-    page.title = "PyQuizy"
+    page.title = "Python Quizy"
     page.window.width = 600
     page.window.height = 750
     page.padding = 0
@@ -1045,7 +1039,7 @@ def main(page: ft.Page):
                     [
 
                         ft.Text(
-                            "Welcome To PyQuizy\U0001f40d!",
+                            "Welcome To Python Quizy\U0001f40d!",
                             size=24,
                             weight=ft.FontWeight.BOLD,
                             text_align=ft.TextAlign.CENTER,
@@ -1058,15 +1052,6 @@ def main(page: ft.Page):
                     menu_buttons,
                     spacing=10,
                     horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-                ),
-                ft.Container(
-                    content=ft.TextButton(
-                        "Privacy Policy",
-                        url=PRIVACY_POLICY_URL,
-                        style=ft.ButtonStyle(color=ft.Colors.GREY_600),
-                    ),
-                    alignment=ft.Alignment.CENTER,
-                    padding=ft.Padding(top=8, bottom=0, left=0, right=0),
                 ),
             ],
         )
@@ -1236,7 +1221,7 @@ def main(page: ft.Page):
             try:
                 page.show_dialog(snackbar)
             except Exception as ex:
-                print(f"[PyQuizy] show_dialog failed: {ex}")
+                print(f"[Python Quizy] show_dialog failed: {ex}")
 
         copy_button = ft.IconButton(
             icon=ft.Icons.COPY,
