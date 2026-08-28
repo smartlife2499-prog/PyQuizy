@@ -1,11 +1,12 @@
+```toml
 [project]
-name = "pyquizy"
+name = "Python Quizy"
 version = "1.0.0"
-description = "PyQuizy – Interactive Python quiz app with 500+ questions across 10 topics"
+description = "Python Quizy – Interactive Python quiz app with 500+ questions across 10 topics"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "PyQuizy", email = "pyquizy@example.com" }
+    { name = "Python Quizy", email = "pyquizy@example.com" }
 ]
 dependencies = [
     "flet>=0.25.0",
@@ -20,9 +21,9 @@ dev = [
 # Docs: https://docs.flet.dev/publish
 [tool.flet]
 org = "com.pyquizy"
-product = "PyQuizy"
-company = "PyQuizy"
-copyright = "Copyright (c) 2025 PyQuizy"
+product = "Python Quizy"
+company = "Python Quizy"
+copyright = "Copyright (c) 2025 Python Quizy"
 bundle_id = "com.pyquizy.app"
 
 [tool.flet.app]
@@ -35,3 +36,4 @@ adaptive_icon_background = "#FFD43B"
 
 [tool.flet.ios]
 # Optional iOS-specific settings can go here
+```
