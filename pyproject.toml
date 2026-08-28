@@ -17,8 +17,6 @@ dev = [
     "flet[all]>=0.25.0",
 ]
 
-# Flet packaging / build settings
-# Docs: https://docs.flet.dev/publish
 [tool.flet]
 org = "com.pyquizy"
 product = "Python Quizy"
@@ -27,13 +25,10 @@ copyright = "Copyright (c) 2025 Python Quizy"
 bundle_id = "com.pyquizy.app"
 
 [tool.flet.app]
-# Path to the folder that contains main.py
 path = "."
 
 [tool.flet.android]
-# Adaptive icon background (Python yellow)
 adaptive_icon_background = "#FFD43B"
 
 [tool.flet.ios]
-# Optional iOS-specific settings can go here
 ```
