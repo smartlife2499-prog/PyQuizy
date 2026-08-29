@@ -1029,6 +1029,30 @@ def main(page: ft.Page):
                 )
             )
 
+        async def open_privacy_policy(e):
+            await page.launch_url(
+                "https://smartlife2499-prog.github.io/privacy-policy-website/"
+            )
+
+        menu_buttons.append(
+            ft.Button(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.PRIVACY_TIP_OUTLINED),
+                        ft.Text(
+                            "Privacy Policy",
+                            size=15,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    spacing=8,
+                ),
+                height=52,
+                on_click=open_privacy_policy,
+            )
+        )
+
         return ft.View(
             route="/",
             scroll=ft.ScrollMode.AUTO,
