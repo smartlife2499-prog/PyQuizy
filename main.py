@@ -1181,7 +1181,7 @@ def main(page: ft.Page):
         return ft.View(
             route=f"/onboarding/{index}",
             bgcolor=data["bg"],
-            padding=ft.Padding(left=24, right=24, top=8, bottom=20),
+            padding=ft.Padding(left=24, right=24, top=48, bottom=20),
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 ft.Column(
