@@ -1113,6 +1113,11 @@ def main(page: ft.Page):
                 page.views[:] = [build_onboarding_view(index + 1)]
                 page.update()
 
+        def go_back(e=None):
+            if index > 0:
+                page.views[:] = [build_onboarding_view(index - 1)]
+                page.update()
+
         def skip(e=None):
             finish_onboarding()
 
@@ -1133,14 +1138,22 @@ def main(page: ft.Page):
         top_row = ft.Row(
             [
                 ft.TextButton(
+                    "Back",
+                    on_click=go_back,
+                    style=ft.ButtonStyle(color=ft.Colors.GREY_600),
+                )
+                if index > 0
+                else ft.Container(width=60, height=36),
+                ft.Container(expand=True),
+                ft.TextButton(
                     "Skip",
                     on_click=skip,
                     style=ft.ButtonStyle(color=ft.Colors.GREY_600),
                 )
                 if not is_last
-                else ft.Container(height=36)
+                else ft.Container(width=60, height=36),
             ],
-            alignment=ft.MainAxisAlignment.END,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
         return ft.View(
@@ -1396,6 +1409,7 @@ def main(page: ft.Page):
             spacing=8,
             expand=True,
             padding=0,
+            scroll=ft.ScrollMode.ALWAYS,
         )
         load_more_row = ft.Row(alignment=ft.MainAxisAlignment.CENTER)
 
