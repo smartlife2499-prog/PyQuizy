@@ -1351,6 +1351,18 @@ def main(page: ft.Page):
         are already in place the moment the quiz appears — and saved back
         immediately on every toggle, so progress survives closing and
         reopening the app.
+
+        PERFORMANCE: the question list uses ft.ListView instead of a plain
+        ft.Column inside a scrolling View. A plain Column wrapped in a
+        scrollable View forces Flutter to build and keep every question's
+        widgets (including the syntax-highlighted Markdown code blocks)
+        in memory at once, even the ones off-screen — that eager building
+        is what made scrolling feel slow/janky on Android once a topic had
+        20-50 questions loaded. ft.ListView is backed by Flutter's
+        ListView.builder, so it only builds the widgets for questions that
+        are actually visible (plus a small buffer), which is dramatically
+        lighter and keeps scrolling smooth regardless of how many
+        questions have been loaded via "Load More".
         """
         questions = QUIZ_DATA[topic]
         total = len(questions)
@@ -1378,7 +1390,13 @@ def main(page: ft.Page):
 
             return handler
 
-        question_list = ft.Column(spacing=8)
+        # A virtualized, lazily-rendered scrollable list (see the
+        # performance note in this function's docstring above).
+        question_list = ft.ListView(
+            spacing=8,
+            expand=True,
+            padding=0,
+        )
         load_more_row = ft.Row(alignment=ft.MainAxisAlignment.CENTER)
 
         def load_more(e=None):
@@ -1417,14 +1435,25 @@ def main(page: ft.Page):
 
         quiz_view = ft.View(
             route=f"/quiz/{topic}",
-            scroll=ft.ScrollMode.AUTO,
+            # No scroll here: the ListView below owns the scrolling, so it
+            # can virtualize its children. Wrapping the whole View in a
+            # scroll (as before) would force everything to be built eagerly
+            # and defeats the ListView's lazy rendering.
+            scroll=None,
             padding=ft.Padding(left=16, right=16, top=12, bottom=12),
             appbar=ft.AppBar(
                 leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=go_back),
                 title=ft.Text(topic),
                 center_title=False,
             ),
-            controls=[progress_text, question_list, load_more_row],
+            controls=[
+                progress_text,
+                # expand=True lets the ListView fill the remaining vertical
+                # space between the progress text and the Load More button,
+                # which is what it needs to know how much it can virtualize.
+                ft.Container(content=question_list, expand=True),
+                load_more_row,
+            ],
         )
 
         page.views.append(quiz_view)
