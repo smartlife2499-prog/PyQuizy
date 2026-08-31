@@ -951,7 +951,10 @@ def main(page: ft.Page):
     page.title = "Python Quizy"
     page.window.width = 600
     page.window.height = 750
+    # Keep the app inside Android's safe display area so the status bar,
+    # notch, camera cutout, and navigation area never cover app content.
     page.padding = 0
+    page.safe_area = True
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.theme_mode = ft.ThemeMode.LIGHT
 
