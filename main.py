@@ -1135,25 +1135,44 @@ def main(page: ft.Page):
             spacing=6,
         )
 
+        navigation_buttons = []
+
+        if index > 0:
+            navigation_buttons.append(
+                ft.Button(
+                    content=ft.Row(
+                        [ft.Icon(ft.Icons.ARROW_BACK_ROUNDED, size=22),
+                         ft.Text("Back", size=16, weight=ft.FontWeight.BOLD)],
+                        alignment=ft.MainAxisAlignment.CENTER, spacing=6,
+                    ),
+                    on_click=go_back, bgcolor=ft.Colors.WHITE,
+                    color=ft.Colors.BLUE_700, height=50,
+                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=14)),
+                )
+            )
+        else:
+            navigation_buttons.append(ft.Container(width=110, height=50))
+
+        if not is_last:
+            navigation_buttons.append(
+                ft.Button(
+                    content=ft.Row(
+                        [ft.Text("Skip", size=16, weight=ft.FontWeight.BOLD),
+                         ft.Icon(ft.Icons.SKIP_NEXT_ROUNDED, size=22)],
+                        alignment=ft.MainAxisAlignment.CENTER, spacing=6,
+                    ),
+                    on_click=skip, bgcolor=data["accent"],
+                    color=ft.Colors.WHITE, height=50,
+                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=14)),
+                )
+            )
+        else:
+            navigation_buttons.append(ft.Container(width=110, height=50))
+
         top_row = ft.Row(
-            [
-                ft.TextButton(
-                    "Back",
-                    on_click=go_back,
-                    style=ft.ButtonStyle(color=ft.Colors.GREY_600),
-                )
-                if index > 0
-                else ft.Container(width=60, height=36),
-                ft.Container(expand=True),
-                ft.TextButton(
-                    "Skip",
-                    on_click=skip,
-                    style=ft.ButtonStyle(color=ft.Colors.GREY_600),
-                )
-                if not is_last
-                else ft.Container(width=60, height=36),
-            ],
+            navigation_buttons,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
         return ft.View(
