@@ -953,8 +953,11 @@ def main(page: ft.Page):
     page.window.height = 750
     # Keep the app inside Android's safe display area so the status bar,
     # notch, camera cutout, and navigation area never cover app content.
+    # NOTE: Flet has no `page.safe_area` attribute (that was dead code —
+    # PyCharm flags it correctly). The real mechanism is the extra top
+    # padding baked into each View below (build_home_view, the onboarding
+    # views, and the quiz view), which achieves the same result.
     page.padding = 0
-    page.safe_area = True
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.theme_mode = ft.ThemeMode.LIGHT
 
@@ -1059,6 +1062,11 @@ def main(page: ft.Page):
         return ft.View(
             route="/",
             scroll=ft.ScrollMode.AUTO,
+            # Extra top padding (on top of page.safe_area) so the "Welcome
+            # To Python Quizy" heading and the rest of the home screen sit
+            # safely below Android's status bar / notification area on
+            # phones where the status bar overlaps the very top of the app
+            # instead of being fully excluded by safe_area alone.
             padding=ft.Padding(left=16, right=16, top=48, bottom=20),
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
