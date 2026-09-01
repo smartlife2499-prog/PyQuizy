@@ -1059,7 +1059,12 @@ def main(page: ft.Page):
         return ft.View(
             route="/",
             scroll=ft.ScrollMode.AUTO,
-            padding=ft.Padding(left=16, right=16, top=20, bottom=20),
+            # Extra top padding (on top of page.safe_area) so the "Welcome
+            # To Python Quizy" heading and the rest of the home screen sit
+            # safely below Android's status bar / notification area on
+            # phones where the status bar overlaps the very top of the app
+            # instead of being fully excluded by safe_area alone.
+            padding=ft.Padding(left=16, right=16, top=48, bottom=20),
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 ft.Column(
